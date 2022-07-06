@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  The Phonebook Application aims to create a phonebook application in Python 
+  and deployed as a web application with Flask on AWS Application 
+  Load Balancer with Auto Scaling Group of Elastic Compute Cloud (EC2) Instances
+  and Relational Database Service (RDS) using AWS Cloudformation Service.
+Parameters:
+  MyVPC:
+    Description: 
+    Type: AWS::EC2::VPC::Id
+    Default: 
+
+  KeyName:
+    Description: firstkey
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: 
+
+  Subnets:
+    Description: 
+    Type: List<AWS::EC2::Subnet::Id>
+    Default: 
+Resources:
+    ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP for ALB
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress : 
+        - IpProtocol : tcp
+        - FromPort : 80
+        - ToPort : 80
+        - CidrIp : 0.0.0.0/0
+    WebServerSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Enable HTTP for flask 
+        SecurityGroupIngress:
+          - IpProtocol : tcp
+            FromPort : 22
+            ToPort : 22
+            CidrIp : 0.0.0.0/0
+          
+          - IpProtocol : tcp
+            FromPort : 80
+            ToPort : 80
+            SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
+  WebServerLT:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData : 
+        ImageId:  ami-0cff7528ff583bf9a
+        InstanceType: t2.micro
+        KeyName: KeyName
+        SecurityGroupIds:
+          - !GetAtt WebServerSecurityGroup.GroupId
+        TagSpecifications:
+          - ResourceType: İnstance
+            Tags:
+              - Key: name
+                Value: !Sub Web server of ${AWS::StackName} Stack 
+
+        UserData:
+          Fn::Base64:
+            !Sub 
+              - 
+               #! /bin/bash
+               yum update -y
+               yum install python3 -y
+               pip3 install flask
+               pip3 install flask_mysql
+               echo "${MyDBURI}" > /home/ec2-user/dbserver.endpoint
+               TOKEN="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" 
+               FOLDER=""
+      LaunchTemplateName: "String"
+      TagSpecifications:
+        TagSpecifications      
+Outputs:
