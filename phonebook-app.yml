@@ -6,23 +6,24 @@ Description: |
   and Relational Database Service (RDS) using AWS Cloudformation Service.
 Parameters:
   MyVPC:
-    Description: 
+    Description: vps ıd ex
     Type: AWS::EC2::VPC::Id
-    Default: 
+    
 
   KeyName:
     Description: firstkey
     Type: AWS::EC2::KeyPair::KeyName
-    Default: 
+    
 
   Subnets:
-    Description: 
+    Description: yapma ya
     Type: List<AWS::EC2::Subnet::Id>
-    Default: 
+   
+    
 Resources:
     ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
+     Type: AWS::EC2::SecurityGroup
+     Properties:
       GroupDescription: Enable HTTP for ALB
       VpcId: !Ref MyVPC
       SecurityGroupIngress : 
@@ -44,34 +45,114 @@ Resources:
             FromPort : 80
             ToPort : 80
             SourceSecurityGroupId: !GetAtt ALBSecurityGroup.GroupId
-  WebServerLT:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateData : 
-        ImageId:  ami-0cff7528ff583bf9a
-        InstanceType: t2.micro
-        KeyName: KeyName
-        SecurityGroupIds:
-          - !GetAtt WebServerSecurityGroup.GroupId
-        TagSpecifications:
-          - ResourceType: İnstance
-            Tags:
-              - Key: name
-                Value: !Sub Web server of ${AWS::StackName} Stack 
+    WebServerLT:
+      Type: AWS::EC2::LaunchTemplate
+      Properties:
+        LaunchTemplateData : 
+          ImageId:  ami-0cff7528ff583bf9a
+          InstanceType: t2.micro
+          KeyName: KeyName
+          SecurityGroupIds:
+            - !GetAtt WebServerSecurityGroup.GroupId
+          TagSpecifications:
+            - ResourceType: İnstance
+              Tags:
+                - Key: name
+                  Value: !Sub Web server of ${AWS::StackName} Stack 
 
         UserData:
           Fn::Base64:
             !Sub 
-              - 
-               #! /bin/bash
-               yum update -y
-               yum install python3 -y
-               pip3 install flask
-               pip3 install flask_mysql
-               echo "${MyDBURI}" > /home/ec2-user/dbserver.endpoint
-               TOKEN="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" 
-               FOLDER=""
-      LaunchTemplateName: "String"
-      TagSpecifications:
-        TagSpecifications      
+              - |
+                #! /bin/bash
+                yum update -y
+                yum install python3 -y
+                pip3 install flask
+                pip3 install flask_mysql
+                echo "${MyDBURI}" > /home/ec2-user/dbserver.endpoint
+                TOKEN="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" 
+                FOLDER="https://$TOKEN@raw.githubusercontent.com/Tekinkvrk/Project-004-Phonebook-Application/"
+                curl -s --create-dirs -o "/home/ec2-user/templates/index.html" -L "$FOLDER"templates/index.html
+                curl -s --create-dirs -o "/home/ec2-user/templates/add-update.html" -L "$FOLDER"templates/add-update.html
+                curl -s --create-dirs -o "/home/ec2-user/templates/delete.html" -L "$FOLDER"templates/delete.html
+                curl -s --create-dirs -o "/home/ec2-user/templates/phonebook-app.html" -L "$FOLDER"templates/phonebook-app.html
+                python3 /home/ec2-user/phonebook-app.py
+              - MyDBURI: !GetAtt MyDatabaseServer.Endpoint.Address
+    WebServerTG:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthyThresholdCount: 2
+        Port: 80
+        Protocol: HTTP
+        TargetType: instance
+        UnhealthyThresholdCount: 3
+        VpcId: !Ref MyVPC   
+
+    ApplicationLoadBalancer:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties:
+       IpAddressType: ipv4
+       Scheme: internet-facing
+       SecurityGroups:
+         !GetAtt ALBSecurityGroup.GroupId
+       Subnets: !Ref Subnets
+       Type: application
+    LogicalID:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties:
+        DefaultActions: 
+          - TargetGroupArn: !Ref WebServerTG
+            Type: forward
+        LoadBalancerArn: !Ref ApplicationLoadBalancer
+        Port: 80
+        Protocol: HTTP
+    WebServerASG:
+      Type: AWS::AutoScaling::AutoScalingGroup
+      Properties: 
+        AvailabilityZones:
+          !GetAZs ""
+        DesiredCapacity: 2
+        HealthCheckGracePeriod: 300
+        HealthCheckType: ELB
+        LaunchTemplate:
+          LaunchTemplateId: !Ref  WebServerLT
+          Version: !GetAtt WebServerLT.LatestVersionNumber
+        MaxSize: 3
+        MinSize: 1
+        TargetGroupARNs:
+         - !Ref  WebServerTG
+             
+    MyDBSecurityGroup:
+       Type: AWS::RDS::DBSecurityGroup
+       Properties:
+         GroupDescription: Front-end access to RDS
+         DBSecurityGroupIngress: # Required
+          - CIDRIP: 0.0.0.0/0
+          - EC2SecurityGroupId: !GetAtt  WebServerSecurityGroup.GroupId
+      
+    MyDatabaseServer:
+      Type: AWS::RDS::DBInstance
+      DeletionPolicy: Delete
+      Properties:
+        AllocatedStorage: 20
+        DBInstanceClass: db.t2.micro
+        BackupRetentionPeriod: 0
+        AllowMajorVersionUpgrade: false
+        AutoMinorVersionUpgrade: true
+        DBInstanceIdentifier: Dante-db-333
+        DBName: clarusway_phonebook
+        DBSecurityGroups:
+          - !Ref  MyDBSecurityGroup
+        Engine: MySQL
+        EngineVersion: 8.0.19
+        MasterUserPassword: Serdar_1
+        MasterUsername: admin
+        Port: 3306
+        PubliclyAccessible: true
+              
 Outputs:
+  WebsiteURL:
+    Value: !Sub 
+      - http://${ALBAddress}
+      - ALBAddress: !GetAtt ApplicationLoadBalancer.DNSName
+    Description: Phonebook Application Phonebook URL
